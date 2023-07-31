@@ -16,6 +16,7 @@ import {ERC4337Utils} from "./ERC4337Utils.sol";
 // test actions/validators
 import "src/validator/ERC165SessionKeyValidator.sol";
 import "src/executor/TokenActions.sol";
+import "src/validator/BLSValidator.sol";
 
 using ERC4337Utils for EntryPoint;
 
@@ -105,6 +106,69 @@ contract KernelExecutionTest is Test {
         ops[0] = op;
         // vm.expectEmit(true, false, false, false);
         // emit TestValidator.TestValidateUserOp(opHash);
+        logGas(op);
+
+        entryPoint.handleOps(ops, beneficiary);
+    }
+
+    function test_mode_2_bls() external {
+        BLSValidator blsValidator = new BLSValidator();
+        TestExecutor testExecutor = new TestExecutor();
+        UserOperation memory op =
+            entryPoint.fillUserOp(address(kernel), abi.encodeWithSelector(TestExecutor.doNothing.selector));
+
+        uint256[4] memory publicKey = [
+            0x004b1d8408dcc643647e4f32a761853e873cd1da8ffc40f03b00647484b3498a,
+            0x248b9979254108c9cbb2005739dc693f1694b7b2058942114a0ab4aa81723a6d,
+            0x0edd89947147f52246e1dc3092b62c9020afca38d470b3b827e267c66350da93,
+            0x2d3f8d5cc58f02219b73b70a0acf33778335e7b5f5c7bf98a1d596b9270e92bb
+        ];
+
+        bytes memory enableData = abi.encodePacked(
+            publicKey,
+            uint48(0), // was interface id
+            TestExecutor.doNothing.selector,
+            uint48(0),
+            uint48(0),
+            uint32(16)
+        );
+
+        bytes32 digest = getTypedDataHash(
+            address(kernel),
+            TestExecutor.doNothing.selector,
+            0,
+            0,
+            address(blsValidator),
+            address(testExecutor),
+            enableData
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
+
+        op.signature = abi.encodePacked(
+            bytes4(0x00000002),
+            uint48(0),
+            uint48(0),
+            address(blsValidator),
+            address(testExecutor),
+            uint256(enableData.length),
+            enableData,
+            uint256(65),
+            r,
+            s,
+            v
+        );
+
+        // The signature is hardcoded because the userOpHash is signed outside
+        // the test is a seperate script.
+        // bytes32 hash = entryPoint.getUserOpHash(op);
+        uint256[2] memory signature = [
+            0x238bd40a43095cc868aa13820ced70e0deedc62f588a029cd9aad8a6b72a2283,
+            0x21f8022a28193d60e8f28bb4ce35086c28b1bbe5bb5bf1564bc7b63a2e544f54
+        ];
+        op.signature = bytes.concat(op.signature, abi.encodePacked(signature));
+        UserOperation[] memory ops = new UserOperation[](1);
+        ops[0] = op;
+
         logGas(op);
 
         entryPoint.handleOps(ops, beneficiary);
