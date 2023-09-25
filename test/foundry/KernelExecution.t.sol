@@ -15,7 +15,7 @@ import "./utils/ERC4337Utils.sol";
 // test actions/validators
 import "src/validator/ERC165SessionKeyValidator.sol";
 import "src/executor/TokenActions.sol";
-import "src/validator/BLSValidator.sol";
+import {BLSValidator} from "src/validator/BLSValidator.sol";
 
 using ERC4337Utils for EntryPoint;
 

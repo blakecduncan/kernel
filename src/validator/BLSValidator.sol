@@ -2,7 +2,7 @@
 
 pragma solidity >=0.8.4 <0.9.0;
 
-import "./IValidator.sol";
+import "src/interfaces/IValidator.sol";
 import "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
 import "src/utils/KernelHelper.sol";
 import "account-abstraction/samples/bls/lib/hubble-contracts/contracts/libs/BLS.sol";
@@ -14,11 +14,11 @@ contract BLSValidator is IKernelValidator {
 
     mapping(address => uint256[4]) public blsValidatorStorage;
 
-    function disable(bytes calldata) external override {
+    function disable(bytes calldata) external payable override {
         delete blsValidatorStorage[msg.sender];
     }
 
-    function enable(bytes calldata _data) external override {
+    function enable(bytes calldata _data) external payable override {
         require(_data.length >= 128, "Calldata is not long enough for bls public key");
 
         uint256[4] memory publicKey = abi.decode(_data, (uint256[4]));
@@ -30,9 +30,9 @@ contract BLSValidator is IKernelValidator {
 
     function validateUserOp(UserOperation calldata _userOp, bytes32 _userOpHash, uint256)
         external
-        view
+        payable
         override
-        returns (uint256 validationData)
+        returns (ValidationData validationData)
     {
         uint256[4] memory publicKey = blsValidatorStorage[_userOp.sender];
         bytes memory hashBytes = abi.encodePacked(_userOpHash);
@@ -45,14 +45,14 @@ contract BLSValidator is IKernelValidator {
         (bool verified, bool callSuccess) = BLS.verifySingle(decodedSignature, publicKey, message);
 
         if (verified && callSuccess) {
-            return 0;
+            return ValidationData.wrap(0);
         }
         // TODO: check if wallet recovered
         return SIG_VALIDATION_FAILED;
     }
 
 
-    function validateSignature(bytes32 hash, bytes calldata signature) public view override returns (uint256) {
+    function validateSignature(bytes32 hash, bytes calldata signature) public view override returns (ValidationData) {
         uint256[4] memory publicKey = blsValidatorStorage[msg.sender];
         uint256[2] memory decodedSignature = abi.decode(signature, (uint256[2]));
 
@@ -64,9 +64,13 @@ contract BLSValidator is IKernelValidator {
         (bool verified, bool callSuccess) = BLS.verifySingle(decodedSignature, publicKey, message);
 
         if (verified && callSuccess) {
-            return 0;
+            return ValidationData.wrap(0);
         }
         // TODO: check if wallet recovered
         return SIG_VALIDATION_FAILED;
+    }
+
+    function validCaller(address _caller, bytes calldata) external view override returns (bool) {
+        return false;
     }
 }
